@@ -14,8 +14,9 @@ import torch
 
 from src.animals import agrupar
 from src.audio import TARGET_SR, mel_spectrogram, preprocess
+from src.cuda_bench import aceleracion, comparar
 from src.model import load_model, predict, select_device
-from src.plots import figura_linea_tiempo, figura_mel, figura_onda
+from src.plots import figura_benchmark, figura_linea_tiempo, figura_mel, figura_onda
 from src.timeline import MIN_RESTO_S, VENTANA_S, linea_de_tiempo
 
 st.set_page_config(page_title="GuauMiau", page_icon="🐶")
@@ -25,6 +26,8 @@ st.set_page_config(page_title="GuauMiau", page_icon="🐶")
 ETIQUETAS_A_PEDIR = 30
 # Por debajo de esta probabilidad no afirmamos qué animal es.
 UMBRAL = 0.10
+# Lotes del benchmark en la app: pocos y pequeños, porque la CPU es lenta.
+BENCH_LOTES = (1, 4)
 
 
 @st.cache_resource(show_spinner="Cargando el modelo AST (la primera vez se descarga)...")
@@ -60,6 +63,42 @@ if device.type == "cuda":
     st.success(f"Usando GPU: {torch.cuda.get_device_name(0)} (CUDA, fp16)")
 else:
     st.warning("No se detectó GPU: se usa la CPU (fp32). Funciona, pero más lento.")
+
+# --- Benchmark CPU vs GPU (no depende del audio) ---
+with st.expander("⚡ Benchmark CPU vs GPU"):
+    st.write(
+        "Mide cuánto tarda AST en clasificar clips de 10 s en la CPU (fp32) y en la "
+        "GPU (fp16), cuántos clips por segundo procesa y cuánta VRAM usa. "
+        "Para la versión completa: `uv run python -m src.cuda_bench`."
+    )
+    if st.button("Ejecutar benchmark"):
+        with st.spinner("Midiendo (la CPU tarda un poco)..."):
+            st.session_state["benchmark"] = comparar(lotes=BENCH_LOTES, repeticiones=3,
+                                                     calentamiento=1)
+    resultados = st.session_state.get("benchmark")
+    if resultados:
+        acel = aceleracion(resultados)
+        if acel:
+            cols = st.columns(len(acel))
+            for col, (lote, x) in zip(cols, acel.items()):
+                col.metric(f"GPU vs CPU, lote {lote}", f"{x:.1f}x más rápida")
+        st.pyplot(figura_benchmark(resultados))
+        st.dataframe(
+            [
+                {
+                    "Dispositivo": f"{r.dispositivo} ({r.nombre})",
+                    "dtype": r.dtype,
+                    "Lote": r.lote,
+                    "Latencia (ms)": round(r.latencia_ms, 1),
+                    "Clips/s": round(r.clips_por_s, 2),
+                    "VRAM modelo (MB)": round(r.vram_modelo_mb) if r.vram_modelo_mb else None,
+                    "VRAM pico (MB)": round(r.vram_pico_mb) if r.vram_pico_mb else None,
+                }
+                for r in resultados
+            ],
+            hide_index=True,
+            width="stretch",
+        )
 
 # --- Entrada de audio: archivo o micrófono ---
 tab_file, tab_mic = st.tabs(["📁 Subir archivo", "🎤 Grabar"])
