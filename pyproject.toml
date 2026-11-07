@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.5.4",
     "soundfile>=0.14.0",
+    "streamlit>=1.67.0",
     "torch",
     "torchaudio",
     "transformers>=5.22.2",
