@@ -15,7 +15,8 @@ import torch
 from src.animals import agrupar
 from src.audio import TARGET_SR, mel_spectrogram, preprocess
 from src.model import load_model, predict, select_device
-from src.plots import figura_mel, figura_onda
+from src.plots import figura_linea_tiempo, figura_mel, figura_onda
+from src.timeline import MIN_RESTO_S, VENTANA_S, linea_de_tiempo
 
 st.set_page_config(page_title="GuauMiau", page_icon="🐶")
 
@@ -80,8 +81,13 @@ if audio_file is not None:
             st.stop()
 
     seconds = waveform.numel() / TARGET_SR
+    # Con más de una ventana tiene sentido la línea de tiempo (ver más abajo).
+    es_largo = seconds >= VENTANA_S + MIN_RESTO_S
     if seconds > 10.24:
-        st.info(f"El audio dura {seconds:.1f} s; el modelo solo analiza los primeros ~10 s.")
+        st.info(
+            f"El audio dura {seconds:.1f} s. El resultado de arriba usa solo los "
+            "primeros ~10 s; la **línea de tiempo** de abajo analiza el audio completo."
+        )
 
     animales = agrupar(top)
     if not animales or animales[0]["score"] < UMBRAL:
@@ -103,6 +109,27 @@ if audio_file is not None:
     with st.expander("Etiquetas originales del modelo (AudioSet)"):
         for item in top[:5]:
             st.write(f"{item['label']}: {item['score']:.1%}")
+
+    # --- Línea de tiempo: qué animal suena en cada ventana de 5 s ---
+    if es_largo:
+        st.write(f"**Línea de tiempo** (ventanas de {VENTANA_S:g} s, procesadas por lotes)")
+        with st.spinner("Analizando el audio por ventanas..."):
+            segmentos = linea_de_tiempo(waveform)
+        st.pyplot(figura_linea_tiempo(segmentos, seconds))
+        st.dataframe(
+            [
+                {
+                    "Desde (s)": round(s.inicio, 1),
+                    "Hasta (s)": round(s.fin, 1),
+                    "Animal": f"{s.animal.emoji} {s.animal.nombre}" if s.animal else "—",
+                    "Confianza": f"{s.score:.0%}" if s.animal else "—",
+                    "Etiqueta AudioSet": s.etiqueta or "—",
+                }
+                for s in segmentos
+            ],
+            hide_index=True,
+            width="stretch",
+        )
 
     # --- Parte visual: lo que el modelo "ve" ---
     st.write("**Forma de onda**")
