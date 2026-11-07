@@ -7,6 +7,7 @@ dependencies = [
     "soundfile>=0.14.0",
     "torch",
     "torchaudio",
+    "transformers>=5.22.2",
 ]
 
 # PyTorch con CUDA 12.8 (driver NVIDIA con CUDA 13.5, ver nvidia-smi).
