@@ -12,10 +12,17 @@ from pathlib import Path
 import streamlit as st
 import torch
 
+from src.animals import agrupar
 from src.audio import preprocess
 from src.model import load_model, predict, select_device
 
 st.set_page_config(page_title="GuauMiau", page_icon="🐶")
+
+# Se piden más etiquetas de las que se muestran: un animal puede estar descrito
+# por varias (Dog, Bark...) y, si se corta en 5, alguna podría quedar fuera.
+ETIQUETAS_A_PEDIR = 30
+# Por debajo de esta probabilidad no afirmamos qué animal es.
+UMBRAL = 0.10
 
 
 @st.cache_resource(show_spinner="Cargando el modelo AST (la primera vez se descarga)...")
@@ -39,7 +46,7 @@ def classify(audio_file) -> tuple[torch.Tensor, list[dict]]:
         waveform = preprocess(tmp_path)
     finally:
         tmp_path.unlink(missing_ok=True)
-    return waveform, predict(waveform)
+    return waveform, predict(waveform, top_k=ETIQUETAS_A_PEDIR)
 
 
 st.title("GuauMiau 🐶🐱")
@@ -75,9 +82,23 @@ if audio_file is not None:
     if seconds > 10.24:
         st.info(f"El audio dura {seconds:.1f} s; el modelo solo analiza los primeros ~10 s.")
 
-    best = top[0]
-    st.subheader(f"{best['label']} ({best['score']:.0%})")
+    animales = agrupar(top)
+    if not animales or animales[0]["score"] < UMBRAL:
+        st.subheader("No parece un animal que conozca 🤔")
+    else:
+        mejor = animales[0]
+        animal = mejor["animal"]
+        st.subheader(f"{animal.nombre} {animal.emoji} ({mejor['score']:.0%})")
+        if animal.foto:
+            st.image(str(animal.foto), width=300)
 
-    st.write("**Top-5** (cada probabilidad es independiente, no suman 100 %):")
-    for item in top:
-        st.progress(min(item["score"], 1.0), text=f"{item['label']}: {item['score']:.1%}")
+        st.write("**Top-5 de animales** (cada probabilidad es independiente, no suman 100 %):")
+        for r in animales[:5]:
+            st.progress(
+                min(r["score"], 1.0),
+                text=f"{r['animal'].emoji} {r['animal'].nombre}: {r['score']:.1%}",
+            )
+
+    with st.expander("Etiquetas originales del modelo (AudioSet)"):
+        for item in top[:5]:
+            st.write(f"{item['label']}: {item['score']:.1%}")
