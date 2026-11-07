@@ -1,0 +1,52 @@
+{
+  "resultados": [
+    {
+      "dispositivo": "CPU",
+      "nombre": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+      "dtype": "float32",
+      "lote": 1,
+      "latencia_ms": 1200.4168000130448,
+      "latencia_std_ms": 22.963733513424167,
+      "clips_por_s": 0.8330439893786333,
+      "vram_modelo_mb": null,
+      "vram_pico_mb": null
+    },
+    {
+      "dispositivo": "CPU",
+      "nombre": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+      "dtype": "float32",
+      "lote": 8,
+      "latencia_ms": 9521.145300008357,
+      "latencia_std_ms": 1764.3033601506054,
+      "clips_por_s": 0.8402350502930545,
+      "vram_modelo_mb": null,
+      "vram_pico_mb": null
+    },
+    {
+      "dispositivo": "GPU",
+      "nombre": "NVIDIA GeForce RTX 3050 Laptop GPU",
+      "dtype": "float16",
+      "lote": 1,
+      "latencia_ms": 28.72600000409875,
+      "latencia_std_ms": 1.8631460961415296,
+      "clips_por_s": 34.811668866438616,
+      "vram_modelo_mb": 171.51220703125,
+      "vram_pico_mb": 203.21337890625
+    },
+    {
+      "dispositivo": "GPU",
+      "nombre": "NVIDIA GeForce RTX 3050 Laptop GPU",
+      "dtype": "float16",
+      "lote": 8,
+      "latencia_ms": 198.9635000063572,
+      "latencia_std_ms": 1.6344718167529408,
+      "clips_por_s": 40.20837992769722,
+      "vram_modelo_mb": 171.51220703125,
+      "vram_pico_mb": 353.35595703125
+    }
+  ],
+  "aceleracion_gpu": {
+    "1": 41.78851214376398,
+    "8": 47.853728446193095
+  }
+}

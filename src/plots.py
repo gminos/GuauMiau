@@ -1,4 +1,4 @@
-"""Gráficos de matplotlib para la app: forma de onda y espectrograma mel.
+"""Gráficos de matplotlib para la app: onda, espectrograma mel, línea de tiempo y benchmark.
 
 Las funciones reciben arrays de numpy (no tensores) para no depender de torch,
 y devuelven una ``Figure`` que Streamlit dibuja con ``st.pyplot``. Se usa
@@ -69,4 +69,58 @@ def figura_linea_tiempo(segmentos: list, duracion: float) -> Figure:
     ax.set_xlabel("Tiempo (s)")
     for lado in ("left", "right", "top"):
         ax.spines[lado].set_visible(False)
+    return fig
+
+
+def figura_benchmark(resultados: list) -> Figure:
+    """Tres paneles CPU contra GPU: latencia, throughput y VRAM.
+
+    ``resultados`` es la salida de ``src.cuda_bench.comparar``. Los dos primeros
+    paneles agrupan las barras por tamaño de lote; el de VRAM solo tiene datos
+    de la GPU (la CPU usa RAM normal, que no mide ``torch.cuda``).
+    """
+    lotes = sorted({r.lote for r in resultados})
+    dispositivos = [d for d in ("CPU", "GPU") if any(r.dispositivo == d for r in resultados)]
+    colores = {"CPU": "tab:gray", "GPU": "tab:green"}
+    por_clave = {(r.dispositivo, r.lote): r for r in resultados}
+    x = np.arange(len(lotes))
+    ancho = 0.8 / len(dispositivos)
+
+    fig = Figure(figsize=(11, 3.6), layout="constrained")
+    ax_lat, ax_thr, ax_vram = fig.subplots(1, 3)
+
+    for i, d in enumerate(dispositivos):
+        filas = [por_clave.get((d, lote)) for lote in lotes]
+        pos = x + (i - (len(dispositivos) - 1) / 2) * ancho
+        for ax, campo in ((ax_lat, "latencia_ms"), (ax_thr, "clips_por_s")):
+            valores = [getattr(r, campo) if r else 0 for r in filas]
+            barras = ax.bar(pos, valores, ancho, label=d, color=colores[d])
+            ax.bar_label(barras, fmt="%.0f" if campo == "latencia_ms" else "%.1f", fontsize=8)
+
+    for ax, titulo, eje in (
+        (ax_lat, "Latencia por lote", "ms (menos es mejor)"),
+        (ax_thr, "Throughput", "clips de 10 s / s (más es mejor)"),
+    ):
+        ax.set_title(titulo)
+        ax.set_ylabel(eje)
+        ax.set_xticks(x, [f"lote {lote}" for lote in lotes])
+        ax.margins(y=0.15)
+    ax_lat.legend()
+
+    gpu = [por_clave[("GPU", lote)] for lote in lotes if ("GPU", lote) in por_clave]
+    ax_vram.set_title("VRAM de la GPU")
+    if gpu:
+        ax_vram.axhline(gpu[0].vram_modelo_mb, color="tab:blue", linestyle="--",
+                        label=f"pesos del modelo ({gpu[0].vram_modelo_mb:.0f} MB)")
+        barras = ax_vram.bar([f"lote {r.lote}" for r in gpu], [r.vram_pico_mb for r in gpu],
+                             color=colores["GPU"], alpha=0.8, label="pico en inferencia")
+        ax_vram.bar_label(barras, fmt="%.0f MB", fontsize=8)
+        ax_vram.set_ylabel("MB")
+        ax_vram.margins(y=0.15)
+        ax_vram.legend(fontsize=8, loc="lower right")
+    else:
+        ax_vram.text(0.5, 0.5, "Sin GPU CUDA", ha="center", va="center",
+                     transform=ax_vram.transAxes, color="gray")
+        ax_vram.set_xticks([])
+        ax_vram.set_yticks([])
     return fig
