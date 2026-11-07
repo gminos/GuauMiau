@@ -8,16 +8,41 @@ varios hilos y ``pyplot`` guarda estado global.
 
 from __future__ import annotations
 
+from functools import wraps
+
 import numpy as np
+from matplotlib import style
 from matplotlib.figure import Figure
 
+# Colores del tema de la app (.streamlit/config.toml): los gráficos se dibujan
+# sobre el mismo color de las tarjetas para que no desentonen.
+FONDO = "#1A2029"
+LINEA = "#3A4452"
+ACENTO = "#FF9F43"
 
+
+def _tema_oscuro(funcion):
+    """Dibuja la figura con el estilo oscuro de la app (texto claro, fondo de tarjeta)."""
+
+    @wraps(funcion)
+    def con_tema(*args, **kwargs):
+        ajustes = {
+            "figure.facecolor": FONDO, "axes.facecolor": FONDO, "savefig.facecolor": FONDO,
+            "axes.edgecolor": LINEA, "grid.color": LINEA,
+        }
+        with style.context(["dark_background", ajustes]):
+            return funcion(*args, **kwargs)
+
+    return con_tema
+
+
+@_tema_oscuro
 def figura_onda(onda: np.ndarray, sr: int) -> Figure:
     """Amplitud del audio en el tiempo."""
     tiempo = np.arange(len(onda)) / sr
     fig = Figure(figsize=(8, 2.2), layout="constrained")
     ax = fig.subplots()
-    ax.plot(tiempo, onda, linewidth=0.5, color="tab:blue")
+    ax.plot(tiempo, onda, linewidth=0.5, color=ACENTO)
     ax.set_xlim(0, tiempo[-1] if len(tiempo) else 1)
     ax.set_ylim(-1, 1)
     ax.set_xlabel("Tiempo (s)")
@@ -25,6 +50,7 @@ def figura_onda(onda: np.ndarray, sr: int) -> Figure:
     return fig
 
 
+@_tema_oscuro
 def figura_mel(mel_db: np.ndarray, duracion: float) -> Figure:
     """Espectrograma mel: tiempo en X, banda de frecuencia en Y, color = volumen (dB)."""
     fig = Figure(figsize=(8, 3), layout="constrained")
@@ -39,6 +65,7 @@ def figura_mel(mel_db: np.ndarray, duracion: float) -> Figure:
     return fig
 
 
+@_tema_oscuro
 def figura_linea_tiempo(segmentos: list, duracion: float) -> Figure:
     """Barra horizontal con un tramo de color por ventana y el animal que suena.
 
@@ -72,6 +99,7 @@ def figura_linea_tiempo(segmentos: list, duracion: float) -> Figure:
     return fig
 
 
+@_tema_oscuro
 def figura_benchmark(resultados: list) -> Figure:
     """Tres paneles CPU contra GPU: latencia, throughput y VRAM.
 

@@ -1,0 +1,8 @@
+# Tema de GuauMiau. Los gráficos de src/plots.py usan estos mismos colores.
+[theme]
+base = "dark"
+primaryColor = "#FF9F43"
+backgroundColor = "#0F1318"
+secondaryBackgroundColor = "#1A2029"
+textColor = "#ECEFF4"
+font = "sans serif"
