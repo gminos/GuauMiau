@@ -79,8 +79,10 @@ def predict(
     "Animal"), por eso cada ``score`` es una probabilidad independiente
     (sigmoide) y no suman 1.
     """
-    lm = load_model(device)
+    return predict_batch([waveform], top_k=top_k, device=device)[0]
 
+
+def _as_mono_array(waveform: torch.Tensor | np.ndarray) -> np.ndarray:
     if isinstance(waveform, torch.Tensor):
         waveform = waveform.detach().cpu().numpy()
     waveform = np.asarray(waveform, dtype=np.float32)
@@ -88,17 +90,39 @@ def predict(
         raise ValueError(f"Se esperaba audio mono 1D, llegó forma {waveform.shape}")
     if waveform.size == 0:
         raise ValueError("El audio está vacío")
+    return waveform
 
-    inputs = lm.feature_extractor(waveform, sampling_rate=SAMPLE_RATE, return_tensors="pt")
+
+@torch.inference_mode()
+def predict_batch(
+    waveforms: list[torch.Tensor | np.ndarray],
+    top_k: int = TOP_K,
+    device: str | None = None,
+) -> list[list[dict[str, float | str]]]:
+    """Como :func:`predict`, pero para varios audios en una sola pasada.
+
+    Todos los audios se apilan en un lote ``(N, 1024, 128)`` y el modelo los
+    procesa a la vez: en la GPU esto aprovecha el paralelismo mucho mejor que
+    llamar a ``predict`` N veces. Devuelve una lista de top-k por cada audio,
+    en el mismo orden de entrada.
+    """
+    if not waveforms:
+        return []
+    lm = load_model(device)
+    arrays = [_as_mono_array(w) for w in waveforms]
+
+    # El feature extractor recorta/rellena cada audio a 1024 frames (~10,24 s),
+    # así que todos quedan del mismo tamaño y se pueden apilar.
+    inputs = lm.feature_extractor(arrays, sampling_rate=SAMPLE_RATE, return_tensors="pt")
     features = inputs["input_values"].to(lm.device, dtype=lm.dtype)
 
-    logits = lm.model(input_values=features).logits[0].float()
-    probs = torch.sigmoid(logits)
+    probs = torch.sigmoid(lm.model(input_values=features).logits.float())  # (N, 527)
 
-    k = min(top_k, probs.numel())
-    scores, indices = probs.topk(k)
+    k = min(top_k, probs.shape[-1])
+    scores, indices = probs.topk(k, dim=-1)
+    scores, indices = scores.cpu().tolist(), indices.cpu().tolist()
     id2label = lm.model.config.id2label
     return [
-        {"label": id2label[int(i)], "score": float(s)}
-        for s, i in zip(scores.cpu(), indices.cpu())
+        [{"label": id2label[i], "score": s} for s, i in zip(fila_s, fila_i)]
+        for fila_s, fila_i in zip(scores, indices)
     ]
