@@ -15,6 +15,7 @@ intenta ``torchaudio.load``, que requiere ``torchcodec`` y ffmpeg instalados.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from os import PathLike
 from pathlib import Path
 
@@ -22,6 +23,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import torchaudio.functional as AF
+import torchaudio.transforms as AT
 
 TARGET_SR = 16_000
 
@@ -132,3 +134,32 @@ def preprocess(
     waveform = to_mono(waveform)
     waveform = resample(waveform, int(sr), target_sr)
     return waveform.clamp_(-1.0, 1.0).contiguous()
+
+
+# Parámetros del espectrograma mel. A 16 kHz, un salto de 160 muestras son 10 ms
+# por columna; 128 bandas mel es lo mismo que usa el feature extractor de AST.
+N_FFT = 1024
+HOP_LENGTH = 160
+N_MELS = 128
+
+
+@lru_cache(maxsize=None)
+def _mel_transforms(device: str) -> tuple[AT.MelSpectrogram, AT.AmplitudeToDB]:
+    """Crea (una sola vez por dispositivo) las transformaciones y las deja en él."""
+    mel = AT.MelSpectrogram(
+        sample_rate=TARGET_SR, n_fft=N_FFT, hop_length=HOP_LENGTH, n_mels=N_MELS
+    ).to(device)
+    return mel, AT.AmplitudeToDB(stype="power", top_db=80).to(device)
+
+
+def mel_spectrogram(waveform: torch.Tensor, device: str | None = None) -> torch.Tensor:
+    """Espectrograma mel en decibeles de un audio mono a 16 kHz.
+
+    El cálculo (FFT + filtros mel) se hace en ``device``: por defecto la GPU si
+    hay CUDA, porque son operaciones sobre matrices que se paralelizan muy bien.
+    Devuelve un tensor ``(N_MELS, frames)`` ya en CPU, listo para graficar.
+    """
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    mel, a_db = _mel_transforms(device)
+    return a_db(mel(waveform.to(device))).cpu()
