@@ -13,8 +13,9 @@ import streamlit as st
 import torch
 
 from src.animals import agrupar
-from src.audio import preprocess
+from src.audio import TARGET_SR, mel_spectrogram, preprocess
 from src.model import load_model, predict, select_device
+from src.plots import figura_mel, figura_onda
 
 st.set_page_config(page_title="GuauMiau", page_icon="🐶")
 
@@ -78,7 +79,7 @@ if audio_file is not None:
             st.error(f"No se pudo procesar el audio: {err}")
             st.stop()
 
-    seconds = waveform.numel() / 16_000
+    seconds = waveform.numel() / TARGET_SR
     if seconds > 10.24:
         st.info(f"El audio dura {seconds:.1f} s; el modelo solo analiza los primeros ~10 s.")
 
@@ -102,3 +103,12 @@ if audio_file is not None:
     with st.expander("Etiquetas originales del modelo (AudioSet)"):
         for item in top[:5]:
             st.write(f"{item['label']}: {item['score']:.1%}")
+
+    # --- Parte visual: lo que el modelo "ve" ---
+    st.write("**Forma de onda**")
+    st.pyplot(figura_onda(waveform.numpy(), TARGET_SR))
+
+    # El espectrograma mel se calcula en la GPU si hay CUDA (ver src/audio.py).
+    st.write("**Espectrograma mel**")
+    mel_db = mel_spectrogram(waveform)
+    st.pyplot(figura_mel(mel_db.numpy(), seconds))
